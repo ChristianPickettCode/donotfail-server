@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+import uvicorn
 
 app = FastAPI()
 
@@ -39,3 +40,6 @@ async def update_item(item_id: int, item: Item):
 async def delete_item(item_id: int):
     # Logic to delete item with given item_id
     return {"message": "Item deleted successfully"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
