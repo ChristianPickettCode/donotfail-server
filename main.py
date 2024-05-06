@@ -9,6 +9,12 @@ class Item(BaseModel):
     name: str
     price: float
 
+
+# Hello World
+@app.get("/")
+async def hello_world():
+    return {"message": "Hello, World!"}
+
 # Create
 
 
