@@ -228,38 +228,38 @@ async def convert_pdf_to_images(slide_id: str):
     # images = os.listdir(f"./temp/{slide_id}")
 
     response = requests.get(pdf_url, timeout=30)
-    images = pdf2image.convert_from_bytes(response.content)
+    images = pdf2image.convert_from_bytes(response.content, fmt="png")
 
     print("images1: ", images)
     index = 0
     # filter out non-image files
-    images = [image for image in images if image.endswith(".png")]
-    print("images2: ", images)
+    # images = [image for image in images if image.endswith(".png")]
+    # print("images2: ", images)
     # sorted_images = sorted(images, key=lambda x: int(
     #     x.split("-")[1].split(".")[0]))
-    # for image in sorted_images:
-    #     print("Uploading image: ", image)
-    #     image_path = f"./temp/{slide_id}/{image}"
-    #     file_name = generate_file_name()
-    #     aws_path = f"slides/{slide_id}/images/{file_name}.png"
+    for image in images:
+        print("Uploading image: ", image)
+        # image_path = f"./temp/{slide_id}/{image}"
+        file_name = generate_file_name()
+        aws_path = f"slides/{slide_id}/images/{file_name}.png"
 
-    #     s3 = boto3.resource('s3')
-    #     res = s3.Object(AWS_BUCKET_NAME, aws_path).put(
-    #         Body=open(image_path, 'rb'))
-    #     print("res: ", res)
-    #     if res.get("ResponseMetadata").get("HTTPStatusCode") == 200:
-    #         url = f"https://{AWS_BUCKET_NAME}.s3.amazonaws.com/{aws_path}"
-    #         print("url: ", url)
-    #         slide_images = SlideImages(
-    #             slide_id=slide_id, image_url=url, order=index)
-    #         index += 1
-    #         print("slide_images: ", slide_images)
-    #         slide_images_dict = slide_images.dict()
-    #         result = slideImages.insert_one(slide_images_dict)
-    #         slide_images_dict["_id"] = str(result.inserted_id)
-    #         print("slide_images_dict: ", slide_images_dict)
-    #         # delete the image from the local folder
-    #         os.remove(image_path)
+        s3 = boto3.resource('s3')
+        res = s3.Object(AWS_BUCKET_NAME, aws_path).put(
+            Body=open(image, 'rb'))
+        print("res: ", res)
+        if res.get("ResponseMetadata").get("HTTPStatusCode") == 200:
+            url = f"https://{AWS_BUCKET_NAME}.s3.amazonaws.com/{aws_path}"
+            print("url: ", url)
+            slide_images = SlideImages(
+                slide_id=slide_id, image_url=url, order=index)
+            index += 1
+            print("slide_images: ", slide_images)
+            slide_images_dict = slide_images.dict()
+            result = slideImages.insert_one(slide_images_dict)
+            slide_images_dict["_id"] = str(result.inserted_id)
+            print("slide_images_dict: ", slide_images_dict)
+            # delete the image from the local folder
+            # os.remove(image_path)
 
     # os.remove(pdf_file_name)
     # os.rmdir(f"./temp/{slide_id}")
