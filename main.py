@@ -94,15 +94,6 @@ def generate_file_name(bytes_length=32):
     return secrets.token_hex(bytes_length)
 
 
-def process_pdf_to_images(pdf_path, output_dir, dpi=500):
-    pages = convert_from_path(pdf_path, dpi)
-    print(f'Number of pages: {len(pages)}')
-
-    for count, page in enumerate(pages):
-        print(f'Processing page {count}')
-        page.save(f'{output_dir}/out-{count}.png', 'PNG')
-
-
 @app.post("/slides")
 async def create_slide(slide: Slide):
     print("/slides")
@@ -194,6 +185,15 @@ def upload_file(file_name, bucket, object_name=None):
     return True
 
 
+def process_pdf_to_images(pdf_path, output_dir, dpi=500):
+    pages = convert_from_path(pdf_path, dpi)
+    print(f'Number of pages: {len(pages)}')
+
+    for count, page in enumerate(pages):
+        print(f'Processing page {count}')
+        page.save(f'{output_dir}/out-{count}.png', 'PNG')
+
+
 @app.post("/slides/{slide_id}/pdf-to-images")
 async def convert_pdf_to_images(slide_id: str):
     slide = slides.find_one({"_id": ObjectId(slide_id)})
@@ -210,11 +210,19 @@ async def convert_pdf_to_images(slide_id: str):
     if not os.path.exists(f"./temp/{slide_id}"):
         os.makedirs(f"./temp/{slide_id}")
 
-    process_pdf_to_images(pdf_url, f"./temp/{slide_id}")
+    # download pdf and convert to images
+    pdf_file_name = f"./temp/{slide_id}/slide.pdf"
+    response = requests.get(pdf_url)
+    with open(pdf_file_name, 'wb') as file:
+        file.write(response.content)
+
+    process_pdf_to_images(pdf_file_name, f"./temp/{slide_id}")
     # upload images to S3
     images = os.listdir(f"./temp/{slide_id}")
 
     index = 0
+    # filter out non-image files
+    images = [image for image in images if image.endswith(".png")]
     sorted_images = sorted(images, key=lambda x: int(
         x.split("-")[1].split(".")[0]))
     for image in sorted_images:
@@ -241,6 +249,7 @@ async def convert_pdf_to_images(slide_id: str):
             # delete the image from the local folder
             os.remove(image_path)
 
+    os.remove(pdf_file_name)
     os.rmdir(f"./temp/{slide_id}")
 
     return {"message": "PDF converted to images", "status_code": 200}
