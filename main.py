@@ -206,20 +206,26 @@ async def convert_pdf_to_images(slide_id: str):
         return {"message": "PDF URL not found", "status_code": 404}
     # if folder not created, create it
     if not os.path.exists("./temp"):
+        print("Creating temp folder")
         os.makedirs("./temp")
     if not os.path.exists(f"./temp/{slide_id}"):
+        print
         os.makedirs(f"./temp/{slide_id}")
 
+    print("Downloading PDF")
     # download pdf and convert to images
     pdf_file_name = f"./temp/{slide_id}/slide.pdf"
     response = requests.get(pdf_url)
+    print("response: ", response)
     with open(pdf_file_name, 'wb') as file:
         file.write(response.content)
 
+    print("Converting PDF to images")
     process_pdf_to_images(pdf_file_name, f"./temp/{slide_id}")
+    print("PDF converted to images")
     # upload images to S3
     images = os.listdir(f"./temp/{slide_id}")
-
+    print("images: ", images)
     index = 0
     # filter out non-image files
     images = [image for image in images if image.endswith(".png")]
