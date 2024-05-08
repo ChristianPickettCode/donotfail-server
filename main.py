@@ -1,3 +1,4 @@
+import io
 from typing import List
 from bson import ObjectId
 import pdf2image
@@ -17,6 +18,7 @@ import secrets
 import logging
 import base64
 from openai import OpenAI
+import boto3
 
 app = FastAPI()
 
@@ -238,16 +240,28 @@ async def convert_pdf_to_images(slide_id: str):
     # sorted_images = sorted(images, key=lambda x: int(
     #     x.split("-")[1].split(".")[0]))
     for image in images:
-        print("Uploading image: ", image)
-        # image_path = f"./temp/{slide_id}/{image}"
-        file_name = generate_file_name()
-        aws_path = f"slides/{slide_id}/images/{file_name}.png"
+        try:
+            print("Uploading image: ", image)
+            # image_path = f"./temp/{slide_id}/{image}"
+            file_name = generate_file_name()
+            aws_path = f"slides/{slide_id}/images/{file_name}.png"
 
-        s3 = boto3.resource('s3')
-        res = s3.Object(AWS_BUCKET_NAME, aws_path).put(
-            Body=open(image, 'rb'))
-        print("res: ", res)
-        if res.get("ResponseMetadata").get("HTTPStatusCode") == 200:
+            in_mem_file = io.BytesIO()
+            # Define the missing variable
+            # key = "your_key_here"
+            image.save(in_mem_file, format="PNG")
+
+            in_mem_file.seek(0)
+
+            client_s3 = boto3.client('s3')
+            res = client_s3.upload_fileobj(
+                in_mem_file,
+                AWS_BUCKET_NAME,
+                aws_path,
+            )
+
+            print("res: ", res)
+            # if res.get("ResponseMetadata").get("HTTPStatusCode") == 200:
             url = f"https://{AWS_BUCKET_NAME}.s3.amazonaws.com/{aws_path}"
             print("url: ", url)
             slide_images = SlideImages(
@@ -260,6 +274,9 @@ async def convert_pdf_to_images(slide_id: str):
             print("slide_images_dict: ", slide_images_dict)
             # delete the image from the local folder
             # os.remove(image_path)
+        except Exception as e:
+            print("Error uploading image: ", e)
+            # Handle the exception here
 
     # os.remove(pdf_file_name)
     # os.rmdir(f"./temp/{slide_id}")
