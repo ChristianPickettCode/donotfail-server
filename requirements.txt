@@ -1,3 +1,15 @@
 fastapi
 pydantic
 uvicorn
+typing
+bson
+pymongo
+python-dotenv
+requests
+pdf2image
+boto3
+botocore
+secrets
+logging
+base64
+openai
