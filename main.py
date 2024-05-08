@@ -1,5 +1,6 @@
 from typing import List
 from bson import ObjectId
+import pdf2image
 import pymongo
 from pymongo import MongoClient
 from fastapi import FastAPI
@@ -205,58 +206,63 @@ async def convert_pdf_to_images(slide_id: str):
     if not pdf_url:
         return {"message": "PDF URL not found", "status_code": 404}
     # if folder not created, create it
-    if not os.path.exists("./temp"):
-        print("Creating temp folder")
-        os.makedirs("./temp")
-    if not os.path.exists(f"./temp/{slide_id}"):
-        print
-        os.makedirs(f"./temp/{slide_id}")
+    # if not os.path.exists("./temp"):
+    #     print("Creating temp folder")
+    #     os.makedirs("./temp")
+    # if not os.path.exists(f"./temp/{slide_id}"):
+    #     print
+    #     os.makedirs(f"./temp/{slide_id}")
 
-    print("Downloading PDF")
-    # download pdf and convert to images
-    pdf_file_name = f"./temp/{slide_id}/slide.pdf"
-    response = requests.get(pdf_url)
-    print("response: ", response)
-    with open(pdf_file_name, 'wb') as file:
-        file.write(response.content)
+    # print("Downloading PDF")
+    # # download pdf and convert to images
+    # pdf_file_name = f"./temp/{slide_id}/slide.pdf"
+    # response = requests.get(pdf_url)
+    # print("response: ", response)
+    # with open(pdf_file_name, 'wb') as file:
+    #     file.write(response.content)
 
-    print("Converting PDF to images")
-    process_pdf_to_images(pdf_file_name, f"./temp/{slide_id}")
-    print("PDF converted to images")
-    # upload images to S3
-    images = os.listdir(f"./temp/{slide_id}")
-    print("images: ", images)
+    # print("Converting PDF to images")
+    # process_pdf_to_images(pdf_file_name, f"./temp/{slide_id}")
+    # print("PDF converted to images")
+    # # upload images to S3
+    # images = os.listdir(f"./temp/{slide_id}")
+
+    response = requests.get(pdf_url, timeout=30)
+    images = pdf2image.convert_from_bytes(response.content)
+
+    print("images1: ", images)
     index = 0
     # filter out non-image files
     images = [image for image in images if image.endswith(".png")]
-    sorted_images = sorted(images, key=lambda x: int(
-        x.split("-")[1].split(".")[0]))
-    for image in sorted_images:
-        print("Uploading image: ", image)
-        image_path = f"./temp/{slide_id}/{image}"
-        file_name = generate_file_name()
-        aws_path = f"slides/{slide_id}/images/{file_name}.png"
+    print("images2: ", images)
+    # sorted_images = sorted(images, key=lambda x: int(
+    #     x.split("-")[1].split(".")[0]))
+    # for image in sorted_images:
+    #     print("Uploading image: ", image)
+    #     image_path = f"./temp/{slide_id}/{image}"
+    #     file_name = generate_file_name()
+    #     aws_path = f"slides/{slide_id}/images/{file_name}.png"
 
-        s3 = boto3.resource('s3')
-        res = s3.Object(AWS_BUCKET_NAME, aws_path).put(
-            Body=open(image_path, 'rb'))
-        print("res: ", res)
-        if res.get("ResponseMetadata").get("HTTPStatusCode") == 200:
-            url = f"https://{AWS_BUCKET_NAME}.s3.amazonaws.com/{aws_path}"
-            print("url: ", url)
-            slide_images = SlideImages(
-                slide_id=slide_id, image_url=url, order=index)
-            index += 1
-            print("slide_images: ", slide_images)
-            slide_images_dict = slide_images.dict()
-            result = slideImages.insert_one(slide_images_dict)
-            slide_images_dict["_id"] = str(result.inserted_id)
-            print("slide_images_dict: ", slide_images_dict)
-            # delete the image from the local folder
-            os.remove(image_path)
+    #     s3 = boto3.resource('s3')
+    #     res = s3.Object(AWS_BUCKET_NAME, aws_path).put(
+    #         Body=open(image_path, 'rb'))
+    #     print("res: ", res)
+    #     if res.get("ResponseMetadata").get("HTTPStatusCode") == 200:
+    #         url = f"https://{AWS_BUCKET_NAME}.s3.amazonaws.com/{aws_path}"
+    #         print("url: ", url)
+    #         slide_images = SlideImages(
+    #             slide_id=slide_id, image_url=url, order=index)
+    #         index += 1
+    #         print("slide_images: ", slide_images)
+    #         slide_images_dict = slide_images.dict()
+    #         result = slideImages.insert_one(slide_images_dict)
+    #         slide_images_dict["_id"] = str(result.inserted_id)
+    #         print("slide_images_dict: ", slide_images_dict)
+    #         # delete the image from the local folder
+    #         os.remove(image_path)
 
-    os.remove(pdf_file_name)
-    os.rmdir(f"./temp/{slide_id}")
+    # os.remove(pdf_file_name)
+    # os.rmdir(f"./temp/{slide_id}")
 
     return {"message": "PDF converted to images", "status_code": 200}
 
