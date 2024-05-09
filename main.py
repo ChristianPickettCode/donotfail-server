@@ -207,50 +207,20 @@ async def convert_pdf_to_images(slide_id: str):
     print("pdf_url: ", pdf_url)
     if not pdf_url:
         return {"message": "PDF URL not found", "status_code": 404}
-    # if folder not created, create it
-    # if not os.path.exists("./temp"):
-    #     print("Creating temp folder")
-    #     os.makedirs("./temp")
-    # if not os.path.exists(f"./temp/{slide_id}"):
-    #     print
-    #     os.makedirs(f"./temp/{slide_id}")
-
-    # print("Downloading PDF")
-    # # download pdf and convert to images
-    # pdf_file_name = f"./temp/{slide_id}/slide.pdf"
-    # response = requests.get(pdf_url)
-    # print("response: ", response)
-    # with open(pdf_file_name, 'wb') as file:
-    #     file.write(response.content)
-
-    # print("Converting PDF to images")
-    # process_pdf_to_images(pdf_file_name, f"./temp/{slide_id}")
-    # print("PDF converted to images")
-    # # upload images to S3
-    # images = os.listdir(f"./temp/{slide_id}")
 
     response = requests.get(pdf_url, timeout=30)
     images = pdf2image.convert_from_bytes(response.content, fmt="png")
 
     print("images1: ", images)
     index = 0
-    # filter out non-image files
-    # images = [image for image in images if image.endswith(".png")]
-    # print("images2: ", images)
-    # sorted_images = sorted(images, key=lambda x: int(
-    #     x.split("-")[1].split(".")[0]))
     for image in images:
         try:
             print("Uploading image: ", image)
-            # image_path = f"./temp/{slide_id}/{image}"
             file_name = generate_file_name()
             aws_path = f"slides/{slide_id}/images/{file_name}.png"
 
             in_mem_file = io.BytesIO()
-            # Define the missing variable
-            # key = "your_key_here"
             image.save(in_mem_file, format="PNG")
-
             in_mem_file.seek(0)
 
             client_s3 = boto3.client('s3')
@@ -261,7 +231,6 @@ async def convert_pdf_to_images(slide_id: str):
             )
 
             print("res: ", res)
-            # if res.get("ResponseMetadata").get("HTTPStatusCode") == 200:
             url = f"https://{AWS_BUCKET_NAME}.s3.amazonaws.com/{aws_path}"
             print("url: ", url)
             slide_images = SlideImages(
@@ -270,16 +239,11 @@ async def convert_pdf_to_images(slide_id: str):
             print("slide_images: ", slide_images)
             slide_images_dict = slide_images.dict()
             result = slideImages.insert_one(slide_images_dict)
-            slide_images_dict["_id"] = str(result.inserted_id)
-            print("slide_images_dict: ", slide_images_dict)
-            # delete the image from the local folder
-            # os.remove(image_path)
+            # slide_images_dict["_id"] = str(result.inserted_id)
+            # print("slide_images_dict: ", slide_images_dict)
         except Exception as e:
             print("Error uploading image: ", e)
-            # Handle the exception here
-
-    # os.remove(pdf_file_name)
-    # os.rmdir(f"./temp/{slide_id}")
+            return {"error": str(e)}
 
     return {"message": "PDF converted to images", "status_code": 200}
 
