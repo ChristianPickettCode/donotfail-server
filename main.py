@@ -49,6 +49,7 @@ try:
     database = client.get_database(DB_NAME)
     slides = database.get_collection("slides")
     slideImages = database.get_collection("slide_images")
+    spaces = database.get_collection("spaces")
 
 except Exception as e:
     raise Exception(
@@ -61,6 +62,7 @@ class Slide(BaseModel):
     _id: str = Field(default_factory=ObjectId)
     name: str = Field(...)
     pdf_url: str = Field(None, allow_none=True)
+    space_id: str = Field(None, allow_none=True)
 
 # Linked list??
 
@@ -72,6 +74,11 @@ class SlideImages(BaseModel):
     order: int = Field(...)
     generated_text: str = Field(None, allow_none=True)
     audio_url: str = Field(None, allow_none=True)
+
+
+class Space(BaseModel):
+    _id: str = Field(default_factory=ObjectId)
+    name: str = Field(...)
 
 
 class AudioRequest(BaseModel):
@@ -316,14 +323,17 @@ class SeachRequest(BaseModel):
 
 def answer_question(context, question):
     PROMPT = """
-    You are a helpful assistant that can answer questions. If you don't know the answer, you can say 'I don't know'. Or if you don't have all the information, just tell me what you can.
+    You are a helpful assistant that can answer questions. If you don't know the answer, you can say 'I don't know'. Or if you don't have all the information, just tell me what you can. If the student asks you to go to a slide or explain a slide use the use the provided functions otherwise just answer their questions.
     """
+    PROMPT_OLD = """
+        You are a helpful assistant that can answer questions. If you don't know the answer, you can say 'I don't know'. Or if you don't have all the information, just tell me what you can.
+        """
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo-0125",
+        model="gpt-3.5-turbo-0125",  # "gpt-4-turbo",  # gpt-3.5-turbo-0125
         messages=[
             {
                 "role": "system",
-                "content": PROMPT
+                "content": PROMPT_OLD
             },
             # {
             #     "role": "user",
@@ -344,6 +354,42 @@ def answer_question(context, question):
                 ]
             }
         ],
+        # tools=[
+        #     {
+        #         "type": "function",
+        #         "function": {
+        #             "name": "move-to-slide",
+        #             "description": "Move to a specific slide in the presentation",
+        #             "parameters": {
+        #                 "type": "object",
+        #                 "properties": {
+        #                     "slideNumber": {
+        #                         "type": "integer",
+        #                         "description": "The number of the slide to navigate to"
+        #                     }
+        #                 },
+        #                 "required": ["slideNumber"]
+        #             }
+        #         }
+        #     },
+        #     {
+        #         "type": "function",
+        #         "function": {
+        #             "name": "explain-slide",
+        #             "description": "Provide a detailed explanation of a specific slide",
+        #             "parameters": {
+        #                 "type": "object",
+        #                 "properties": {
+        #                     "slideNumber": {
+        #                         "type": "integer",
+        #                         "description": "The number of the slide to explain"
+        #                     }
+        #                 },
+        #                 "required": ["slideNumber"]
+        #             }
+        #         }
+        #     }
+        # ],
         max_tokens=300,
     )
     return response
@@ -468,6 +514,102 @@ async def delete_slide(slide_id: str):
         return {"message": "Slide deleted successfully", "status_code": 200}
     else:
         return {"message": "Slide not found", "status_code": 404}
+
+# create space
+
+
+@app.post("/spaces")
+async def create_space(space: Space):
+    print("/spaces")
+    print("space: ", space)
+    space_dict = space.dict()
+    result = spaces.insert_one(space_dict)
+    space_dict["_id"] = str(result.inserted_id)
+    # return status, message, and the created space
+    return {"status_code": 201, "status": "success", "message": "Space created successfully", "data": space_dict}
+
+
+class SlideSpaceRequest(BaseModel):
+    slide_id: str
+    space_id: str
+
+# add to space with space_id in slides
+
+
+@app.put("/add-slide-to-space")
+async def add_slide_to_space(slidespace: SlideSpaceRequest):
+    print("add_slide_to_space")
+    print("space_id: ", slidespace.space_id)
+    print("slide_id: ", slidespace.slide_id)
+    slide = slides.find_one({"_id": ObjectId(slidespace.slide_id)})
+    if not slide:
+        return {"message": "Slide not found", "status_code": 404}
+    result = slides.find_one_and_update(
+        {"_id": ObjectId(slidespace.slide_id)}, {"$set": {"space_id": slidespace.space_id}}, return_document=pymongo.ReturnDocument.AFTER)
+    result["_id"] = str(result["_id"])
+    if result:
+        return {"message": "Slide added to space successfully", "status_code": 200, "data": result}
+    else:
+        return {"message": "Slide not found", "status_code": 404}
+
+
+# remove from space
+@app.put("/remove-slide-from-space")
+async def remove_slide_from_space(slidespace: SlideSpaceRequest):
+    print("remove_slide_from_space")
+    print("space_id: ", slidespace.space_id)
+    print("slide_id: ", slidespace.slide_id)
+    slide = slides.find_one({"_id": ObjectId(slidespace.slide_id)})
+    if not slide:
+        return {"message": "Slide not found", "status_code": 404}
+    result = slides.find_one_and_update(
+        {"_id": ObjectId(slidespace.slide_id)}, {"$unset": {"space_id": ""}}, return_document=pymongo.ReturnDocument.AFTER)
+    result["_id"] = str(result["_id"])
+    if result:
+        return {"message": "Slide removed from space successfully", "status_code": 200, "data": result}
+    else:
+        return {"message": "Slide not found", "status_code": 404}
+
+
+# get all spaces
+@app.get("/spaces")
+async def list_spaces():
+    print("list_spaces")
+    spaces_list = []
+    for space in spaces.find():
+        print("space: ", space)
+        space["_id"] = str(space["_id"])
+        spaces_list.append(space)
+    return {"status": "success", "data": spaces_list, "status_code": 200}
+
+# get all slides in a space
+
+
+@app.get("/spaces/{space_id}/slides")
+async def list_slides_in_space(space_id: str):
+    print("list_slides_in_space")
+    slides_list = []
+    for slide in slides.find({"space_id": space_id}):
+        print("slide: ", slide)
+        slide["_id"] = str(slide["_id"])
+        slides_list.append(slide)
+    return {"status": "success", "data": slides_list, "status_code": 200}
+
+# delete space
+
+
+@app.delete("/spaces/{space_id}")
+async def delete_space(space_id: str):
+    print("*** /delete_space ***")
+    space = spaces.find_one({"_id": ObjectId(space_id)})
+    print("space: ", space)
+    result = spaces.delete_one({"_id": ObjectId(space_id)})
+    print("result: ", result)
+    if result.deleted_count == 1:
+        return {"message": "Space deleted successfully", "status_code": 200}
+    else:
+        return {"message": "Space not found", "status_code": 404}
+
 
 # ping
 
